@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: FoodAtlas' pipeline for automated data collection and validation
+
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: nodejs20.x
+    Architectures:
+      - x86_64
+    Tracing: Active
+    LoggingConfig:
+      LogFormat: JSON
+    Environment:
+      Variables:
+        RESEND_API_KEY: re_M7bGnJeW_KDvY6N1czMdQP3HqLjznCzpn
+        BUCKET_NAME: foodatlas-scrape-bucket
+  Api:
+    TracingEnabled: true
+
+Resources:
+  ScrapePaperFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: ./
+      Handler: src/functions/scrape/handler.lambdaHandler
+      Policies:
+        - S3CrudPolicy:
+            BucketName: foodatlas-scrape-bucket
+      Events:
+        MonthlyTrigger:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 0 1 * ? *)  # Run at midnight on the first day of every month
+            Description: Monthly paper scraping trigger
+            Enabled: true
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        Sourcemap: true
+        EntryPoints:
+          - src/functions/scrape/handler.ts
+
+  ListUnverifiedFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: ./
+      Handler: src/functions/list/handler.lambdaHandler
+      Policies:
+        - S3CrudPolicy:
+            BucketName: foodatlas-scrape-bucket
+      Events:
+        ListUnverified:
+          Type: Api
+          Properties:
+            Path: /list-unverified
+            Method: get
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        Sourcemap: true
+        EntryPoints:
+          - src/functions/list/handler.ts
+
+  ReviewPaperFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: ./
+      Handler: src/functions/review/handler.lambdaHandler
+      Policies:
+        - S3CrudPolicy:
+            BucketName: foodatlas-scrape-bucket
+      Events:
+        ReviewPaper:
+          Type: Api
+          Properties:
+            Path: /review
+            Method: post
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        Sourcemap: true
+        EntryPoints:
+          - src/functions/review/handler.ts
+
+Outputs:
+  ScrapePaperApi:
+    Description: API Gateway endpoint URL for the Scrape Paper function
+    Value: https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/scrape/
+  ListUnverifiedApi:
+    Description: API Gateway endpoint URL for the List Unverified function
+    Value: https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/list-unverified/
+  ReviewPaperApi:
+    Description: API Gateway endpoint URL for the Review Paper function
+    Value: https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/review/
